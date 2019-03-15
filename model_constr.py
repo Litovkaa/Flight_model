@@ -6,7 +6,7 @@ import math
 import scipy.stats as st
 from statsmodels.stats.weightstats import _tconfint_generic
 import xgboost as xgb
-from sklearn.model_ import cross_validation
+from sklearn.model_selection import train_test_split
 #import timezonefinder
 
 # ##############################################################################################################
@@ -16,7 +16,7 @@ def train_data_preparation(dat):
     # Очистка от строк с пустыми значениями во всех стобцах, кроме aircraft_model ,real_departure_time,real_arrival_time
     dat = dat.dropna(subset = ['flight_number', 'scheduled_departure_time', 'scheduled_arrival_time', 'airport_origin', 'airport_destination', 'airline_name', 'flight_status'])
     # Oчистка от неугодных данных (Scheduled, Estimated, Unknown)
-    dat = dat.loc[ (~dat[["real_departure_time", "real_arrival_time"]].isna().sum(axis=1) & dat.flight_status.str.contains("Landed")) | (dat.flight_status.str.contains("Canceled") | dat.flight_status.str.contains("Diverted"))]
+    dat = dat.loc[(~dat[["real_departure_time", "real_arrival_time"]].isna().sum(axis=1) & dat.flight_status.str.contains("Landed")) | (dat.flight_status.str.contains("Canceled") | dat.flight_status.str.contains("Diverted"))]
         
     # Чтение csv файла c АП
     airport_dat = pd.read_csv(u"C:/Users/sam/Desktop/reysy/AP.txt", sep = ",", encoding = "ISO-8859-1")
@@ -187,7 +187,7 @@ def data_split(X, Y):
     X_train = X.loc[X.apply(lambda row: row["scheduled_departure_time_msk"].year, axis = 1) != 2018]
     Y_train = Y.loc[Y.apply(lambda row: row["scheduled_departure_time_msk"].year, axis = 1) != 2018]
     
-    X_test, X_val, Y_test, Y_val  = cross_validation.train_test_split(X.loc[X.apply(lambda row: row["scheduled_departure_time_msk"].year, axis = 1) == 2018], 
+    X_test, X_val, Y_test, Y_val  = train_test_split(X.loc[X.apply(lambda row: row["scheduled_departure_time_msk"].year, axis = 1) == 2018],
                                                                       Y.loc[Y.apply(lambda row: row["scheduled_departure_time_msk"].year, axis = 1) == 2018],
                                                                       test_size = 0.5)
     return [X_train, Y_train, X_test, Y_test, X_val, Y_val]
