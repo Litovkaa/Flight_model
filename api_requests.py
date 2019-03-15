@@ -23,4 +23,3 @@ def request_scheduled_data(time_period):
     else:
         return "Error executing request"
 
-def request
