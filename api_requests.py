@@ -5,14 +5,14 @@ import time
 from pandas.io.json import json_normalize
 import pandas as pd
 
-def request_scheduled_data(time_period):
+def request_scheduled_data(time_period, n_lines):
     date_today = datetime.strptime(str(datetime.now()).split(" ")[0], "%Y-%m-%d")
     start_time = int(time.mktime(date_today.timetuple()))
     end_time = start_time + time_period
     payload = {'startDate': start_time,
                'endDate': end_time,
                'origin':"DME",
-               'howMany': 15}
+               'howMany': n_lines}
 
     response = requests.get(fxmlUrl + 'AirlineFlightSchedules',
                             params=payload, auth=(USERNAME, apiKey))
@@ -44,8 +44,12 @@ def request_airline_info(airline_code):
     else:
         return "Error executing request"
 
-def compile_table():
-    scheduled_query = request_scheduled_data(86400)
+def compile_table(n_lines):
+    if n_lines > 15:
+        requests.get(fxmlUrl + 'SetMaximumResultSize',
+                     params={'max_size':n_lines}, auth=(USERNAME, apiKey))
+
+    scheduled_query = request_scheduled_data(86400, n_lines)
     schedule_df = json_normalize(scheduled_query['AirlineFlightSchedulesResult'], 'data')
 
     aircraft_types = {}
@@ -56,13 +60,13 @@ def compile_table():
             aircraft_types[el] = aircraft_type
 
     airline_info_dict = {}
-    uniq_airline_idents = set([el[:3] for el in schedule_df.ident])
-    for el in uniq_airline_idents:
+    airline_idents = [el[:3] for el in schedule_df.ident]
+    for el in set(airline_idents):
         if el != "" and el not in airline_info_dict.keys():
             airline_info_dict[el] = request_airline_info(el)['AirlineInfoResult']['shortname']
 
     schedule_df.aircrafttype = [aircraft_types[el] if el != "" else None for el in schedule_df.aircrafttype.values]
-    schedule_df['airline'] = [airline_info_dict[el] for el in uniq_airline_idents if el != ""]
+    schedule_df['airline'] = [airline_info_dict[el] for el in airline_idents if el != ""]
     schedule_df.drop(columns=['meal_service', 'seats_cabin_business', 'seats_cabin_coach',
                               'seats_cabin_first', 'actual_ident'],
                      inplace=True)
