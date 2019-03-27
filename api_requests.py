@@ -1,9 +1,25 @@
 import requests
-from credentials import *
+from data.credentials import *
 from datetime import datetime
 import time
 from pandas.io.json import json_normalize
 import pandas as pd
+
+
+def collect_airlines_data():
+    icao_codes = requests.get(fxmlUrl + "AllAirlines", auth=(USERNAME, apiKey))
+
+    if icao_codes.status_code == 200:
+        icao_codes = icao_codes.json()
+    else:
+        return
+
+    icao_codes = json_normalize(icao_codes['AllAirlinesResult'], 'data')
+    icao_codes.dropna(inplace=True)
+    icao_codes.rename(columns={0:"AIRLINE_ICAO"})
+    icao_codes['shortnames'] = icao_codes.apply(lambda x: request_airline_info(x), axis=1)
+    return icao_codes
+
 
 def request_scheduled_data(time_period, n_lines):
     date_today = datetime.strptime(str(datetime.now()).split(" ")[0], "%Y-%m-%d")
@@ -22,6 +38,7 @@ def request_scheduled_data(time_period, n_lines):
     else:
         return "Error executing request"
 
+
 def request_aircraft_type(aircraft_type):
     payload = {'type':aircraft_type}
 
@@ -32,6 +49,7 @@ def request_aircraft_type(aircraft_type):
         return response.json()
     else:
         return "Error executing request"
+
 
 def request_airline_info(airline_code):
     payload = {"airlineCode":airline_code}
@@ -44,7 +62,26 @@ def request_airline_info(airline_code):
     else:
         return "Error executing request"
 
-def compile_table(n_lines):
+
+def request_faFlightID(ident, departure_time):
+    payload = {'ident': ident, "departureTime": departure_time}
+
+    response = requests.get(fxmlUrl + "GetFlightID",
+                            params=payload, auth=(USERNAME, apiKey))
+
+    if response.status_code == 200:
+        out_dict = response.json()
+        if 'error' not in out_dict.keys():
+            return out_dict['GetFlightIDResult']
+        else:
+            return None
+
+
+def schedule_FlightEx_request():
+    return
+
+
+def flightsInTheAir(n_lines):
     if n_lines > 15:
         requests.get(fxmlUrl + 'SetMaximumResultSize',
                      params={'max_size':n_lines}, auth=(USERNAME, apiKey))
@@ -71,5 +108,39 @@ def compile_table(n_lines):
                               'seats_cabin_first', 'actual_ident'],
                      inplace=True)
 
+    schedule_df['faFlightID'] = schedule_df.apply(lambda x: request_faFlightID(x['ident'], x['departuretime']), axis=1)
+
     return schedule_df
 
+
+def request_airport_arrived(icao, n_lines):
+    payload = {'airport': icao, 'howMany': n_lines}
+
+    response = requests.get(fxmlUrl + 'Arrived',
+                            params=payload, auth=(USERNAME, apiKey))
+
+    if response.status_code == 200:
+        return response.json()
+    else:
+        return
+
+
+def request_FlightInfoEx(faFlightID):
+    payload = {'ident': faFlightID}
+
+    response = requests.get(fxmlUrl + 'FlightInfoEx',
+                            params=payload, auth=(USERNAME, apiKey))
+
+    if response.status_code == 200:
+        return response.json()
+    else:
+        return
+
+
+def ArrivedFlights(icao, n_lines=15):
+    if n_lines > 15:
+        requests.get(fxmlUrl + 'SetMaximumResultSize',
+                     params={'max_size':n_lines}, auth=(USERNAME, apiKey))
+
+    arrived_query = request_airport_arrived(icao)
+    arrived_df = json_normalize(arrived_query, ['ArrivedResult'], 'arrivals')
